@@ -5,23 +5,18 @@
 
 using namespace std;
 
-
-//Class
-//
-//Game
+//Game class
 class Game
 {
     private:
     const int Windowwidth = 800;
     const int WindowHeight = 800;
+    const int MAX_FPS = 60;
     
     //Textures
+    Texture2D tex_player, tex_bullet;
     
-
     public:
-    //Textures
-    Texture2D player_tex, bullet_tex;
-
     void GameInit()
     {
         InitWindow(Windowwidth, WindowHeight, "Game");
@@ -31,15 +26,32 @@ class Game
 
     void TextureLoad()
     {
-        bullet_tex = LoadTexture("assets/dummy_bulletpng.png");
-        player_tex = LoadTexture("assets/test_box_player.png");
+        tex_bullet = LoadTexture("assets/dummy_bulletpng.png");
+        tex_player = LoadTexture("assets/test_box_player.png");
     }
 
+    Texture2D AssignTexture(int index)
+    {
+        if(index == 0)
+        {
+            return tex_player;
+        }
+        else if(index == 1)
+        {
+            return tex_bullet;
+        }
+    }
 
+    int GetMaxFPS()
+    {
+        return MAX_FPS;
+    }
 };
 
+//Game class declaration
+Game game;
 
-
+//Class
 class Entity
 {
     protected:
@@ -57,11 +69,12 @@ class Entity
     //
     Vector2 position;
     Rectangle frame;
+    Rectangle HitBox;
     Texture2D texture;
     
     public:
     //Constructor & destructor
-    Entity(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Texture2D texture)
+    Entity(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Rectangle HitBox, Texture2D texture)
     {
         this->health = health;
         this->deffense = deffense;
@@ -70,6 +83,7 @@ class Entity
         this->speedV = {this->speed, this->speed};
         this->position = position;
         this->frame = frame;
+        this->HitBox = HitBox;
         this->texture = texture;
     }
     ~Entity()
@@ -141,6 +155,24 @@ class Entity
         }
     }
 
+    //Movement related
+    void MoveRight()
+    {
+        position.x += speedV.x;
+    }
+    void MoveLeft()
+    {
+        position.x -= speedV.x;
+    }
+    void MoveUp()
+    {
+        position.y -= speedV.y;
+    }
+    void MoveDown()
+    {
+        position.y += speedV.y;
+    }
+
     //Reset state function
     void ResetState()
     {
@@ -167,13 +199,11 @@ class Player:public Entity
 
     int PlayerAmmo = 10;
 
-
     public:
     int const MAX_BULLET = 50;
 
-
     //Constructor & destructor
-    Player(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Texture2D texture):Entity(health, deffense, attack, speed, position, frame, texture)
+    Player(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Rectangle HitBox, Texture2D texture):Entity(health, deffense, attack, speed, position, frame, HitBox, texture)
     {
         this->health = health;
         this->deffense = deffense;
@@ -189,15 +219,34 @@ class Player:public Entity
 
     void DetectInput()
     {
+        //Movement
+        if(IsKeyDown(KEY_W))
+        {
+            MoveUp();
+        }
+        if(IsKeyDown(KEY_S))
+        {
+            MoveDown();
+        }
+        if(IsKeyDown(KEY_D))
+        {
+            MoveRight();
+        }
+        if(IsKeyDown(KEY_A))
+        {
+            MoveLeft();
+        }
+
         //Shot
         if(IsKeyPressed(KEY_SPACE))
         {
-            TrigShot = true;
+            ModShotState(true);
         }
-        if(IsKeyReleased(KEY_SPACE))
+        else if(IsKeyReleased(KEY_SPACE))
         {
-            TrigShot = false;
+            ModShotState(false);
         }
+
     }
 
     void Update() override
@@ -297,13 +346,14 @@ class Bullet:public Projectile
         //Shot trigger
         if(!IsActive)
         {
+            position = origin;
             ShotTrigger(entity->GetShotState());
         }
         //update position
         if(IsActive)
         {
-            position.x += speedV.x/(float(GetFPS())/60.0);
-            TravelDist += speedV.x/(float(GetFPS())/60.0);
+            position.x += speedV.x/(float(GetFPS())/float(game.GetMaxFPS()));
+            TravelDist += speedV.x/(float(GetFPS())/float(game.GetMaxFPS()));
         }
 
         //update origin
@@ -356,10 +406,16 @@ enum Attribute
     ATTRIBUTE_HEALTH = 0, ATTRIBUTE_DEFF, ATTRIBUTE_ATK, ATTRIBUTE_SPD, 
 };
 
-
+//Texture index
+enum TextureIndex
+{
+    TEX_PLAYER = 0, TEX_BULLET,
+};
 
 
 //Game related functions (nanti dibuat jadi class)
+
+
 
 
 
@@ -367,15 +423,14 @@ enum Attribute
 int main()
 {
     //Game Init
-    Game game;
     game.GameInit();
     game.TextureLoad();
     //Class init
-    Player player(100, 10, 10, 5, {200, 400}, {200, 400, 20, 20}, game.player_tex);
+    Player player(100, 10, 10, 5, {200, 400}, {200, 400, 20, 20}, {200, 400, 20, 20}, game.AssignTexture(TEX_PLAYER));
     vector<Bullet> bullet;
     for(int i = 0; i < player.MAX_BULLET; i++)
     {
-        bullet.push_back(Bullet(5, player.GetPos(), game.bullet_tex, player));
+        bullet.push_back(Bullet(5, player.GetPos(), game.AssignTexture(TEX_BULLET), player));
     }
     
     //Main Game Loop
@@ -390,7 +445,6 @@ int main()
         {
             bullet[i].Draw();
         }
-
 
         EndDrawing();
 
