@@ -5,13 +5,45 @@
 
 using namespace std;
 
-const int WindowWidth = 800;
-const int WindowHeight = 800;
 
 //Class
+
+//Game
+class Game
+{
+    private:
+    const int Windowwidth = 800;
+    const int WindowHeight = 800;
+    
+    //Textures
+    
+
+    public:
+    //Textures
+    Texture2D player_tex, bullet_tex;
+
+    void GameInit()
+    {
+        InitWindow(Windowwidth, WindowHeight, "Game");
+        SetTargetFPS(60);
+        TextureLoad();
+    }
+
+    void TextureLoad()
+    {
+        bullet_tex = LoadTexture("assets/dummy_bulletpng.png");
+        player_tex = LoadTexture("assets/test_box_player.png");
+    }
+
+
+};
+
+
+
 class Entity
 {
     protected:
+    //stats related
     float health;
     float deffense;
     float attack;
@@ -19,6 +51,10 @@ class Entity
     Vector2 speedV;         //vector speed
     bool IsAlive = true;
 
+    //attack related
+    bool TrigShot = false;
+
+    //
     Vector2 position;
     Rectangle frame;
     Texture2D texture;
@@ -36,7 +72,10 @@ class Entity
         this->frame = frame;
         this->texture = texture;
     }
-    ~Entity();
+    ~Entity()
+    {
+
+    }
 
     //Functions
     //Property access functions
@@ -67,6 +106,11 @@ class Entity
         return position;
     }
 
+    bool GetShotState()
+    {
+        return TrigShot;
+    }
+
     //Property modification functions
     float AddHealth(float val)
     {
@@ -85,14 +129,33 @@ class Entity
         return attack + val;
     }
 
+    void ModShotState(bool state)
+    {
+        if(state)
+        {
+            TrigShot = true;
+        }
+        else
+        {
+            TrigShot = false;
+        }
+    }
+
     //Reset state function
     void ResetState()
     {
         IsAlive = true;
     }
 
-    virtual void Update() = 0;
-    virtual void Draw() = 0;
+    virtual void Update()
+    {
+
+    };
+    virtual void Draw()
+    {
+
+    };
+    
 
 };
 
@@ -101,15 +164,16 @@ class Player:public Entity
     private:
     int AttackMode;
     float ShieldHealth;
-    int const PLAYER_MAX_BULLET = 50;
-    int PlayerAmmo = 10;
 
-    vector<Bullet> bullet;
+    int PlayerAmmo = 10;
 
 
     public:
+    int const MAX_BULLET = 50;
+
+
     //Constructor & destructor
-    Player(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Texture2D Texture):Entity(health, deffense,attack,speed, position, frame, texture)
+    Player(float health, float deffense, float attack, float speed, Vector2 position, Rectangle frame, Texture2D texture):Entity(health, deffense, attack, speed, position, frame, texture)
     {
         this->health = health;
         this->deffense = deffense;
@@ -121,11 +185,30 @@ class Player:public Entity
         this->texture = texture;
         this->ShieldHealth = 500;
 
-        for(int i = 0; i < PLAYER_MAX_BULLET; i++)
-        {
-            bullet.push_back(Bullet(5, GetPos()));
-        }
     };
+
+    void DetectInput()
+    {
+        //Shot
+        if(IsKeyPressed(KEY_SPACE))
+        {
+            TrigShot = true;
+        }
+        if(IsKeyReleased(KEY_SPACE))
+        {
+            TrigShot = false;
+        }
+    }
+
+    void Update() override
+    {
+        DetectInput();
+    }
+
+    void Draw() override
+    {
+        DrawTexture(texture, position.x, position.y, WHITE);
+    }
 
 
 };
@@ -161,6 +244,7 @@ class Projectile
     bool IsActive = false;
     Vector2 speedV;
     Vector2 position;
+    Vector2 origin;
 
     public:
     Projectile(float speed, Vector2 position)
@@ -168,8 +252,12 @@ class Projectile
         this->speed = speed;
         this->speedV = {speed, speed};
         this->position = position;
+        this->origin = position;
     }
-    ~Projectile();
+    ~Projectile()
+    {
+
+    }
 
     float GetSpeed()
     {
@@ -181,7 +269,7 @@ class Projectile
     }
 
     virtual void Update() = 0;
-    virtual void 
+    virtual void Draw() = 0;
 };
 
 class Bullet:public Projectile
@@ -189,13 +277,63 @@ class Bullet:public Projectile
     private:
     Texture2D texture;
     Rectangle frame;
+    float TravelDist = 0;
+    float const MAX_TRAVEL_DISTANCE = 200;
+
+    Entity *entity;
 
     public:
-    Bullet(float speed, Vector2 position):Projectile(speed, position)
+    Bullet(float speed, Vector2 position, Texture2D texture, Entity& entity):Projectile(speed, position)
     {
         this->speed = speed;
         this->speedV = {speed, speed};
         this->position = position;
+        this->origin = position;
+        this->texture = texture;
+        this->entity = &entity;
+    }
+    void Update() override
+    {
+        //Shot trigger
+        if(!IsActive)
+        {
+            ShotTrigger(entity->GetShotState());
+        }
+        //update position
+        if(IsActive)
+        {
+            position.x += speedV.x/(float(GetFPS())/60.0);
+            TravelDist += speedV.x/(float(GetFPS())/60.0);
+        }
+
+        //update origin
+        origin = entity->GetPos();
+
+        //max travel
+        if(TravelDist > MAX_TRAVEL_DISTANCE)
+        {
+            IsActive = false;
+            position.x = origin.x;
+            position.y = origin.y;
+            TravelDist = 0;
+        }
+    }
+
+    void ShotTrigger(bool trigger)
+    {
+        if(trigger)
+        {
+            IsActive = true;
+            entity->ModShotState(false);
+        }
+    }
+
+    void Draw() override
+    {
+        if(IsActive)
+        {
+            DrawTexture(texture, position.x, position.y, WHITE);
+        }
     }
 };
 
@@ -219,14 +357,50 @@ enum Attribute
 };
 
 
+
+
+//Game related functions (nanti dibuat jadi class)
+
+
+
 //Main
 int main()
 {
-    InitWindow(WindowWidth, WindowHeight, "Test");
-
+    //Game Init
+    Game game;
+    game.GameInit();
+    game.TextureLoad();
+    //Class init
+    Player player(100, 10, 10, 5, {200, 400}, {200, 400, 20, 20}, game.player_tex);
+    vector<Bullet> bullet;
+    for(int i = 0; i < player.MAX_BULLET; i++)
+    {
+        bullet.push_back(Bullet(5, player.GetPos(), game.bullet_tex, player));
+    }
+    
     //Main Game Loop
     while(!WindowShouldClose())
     {
+        //Draw
+        BeginDrawing();
+        ClearBackground(WHITE);
+        DrawFPS(0, 0);
+        player.Draw();
+        for(int i = 0; i < player.MAX_BULLET; i++)
+        {
+            bullet[i].Draw();
+        }
+
+
+        EndDrawing();
+
+        //Update
+        player.Update();
+        for(int i = 0; i < player.MAX_BULLET; i++)
+        {
+            bullet[i].Update();
+        }
+
 
     }
 }
