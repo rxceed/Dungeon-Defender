@@ -7,7 +7,7 @@ using namespace std;
 
 
 //Class
-
+//
 //Game
 class Game
 {
