@@ -1,0 +1,3 @@
+-Selesaikan class dan lain lain
+-Tes input player
+-HARUS ADA FITUR SAVE GAME
