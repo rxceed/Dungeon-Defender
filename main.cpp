@@ -24,6 +24,12 @@ enum Attribute
     ATTRIBUTE_HEALTH = 0, ATTRIBUTE_DEF, ATTRIBUTE_ATK, ATTRIBUTE_SPD, 
 };
 
+//Facing orientation
+enum Orientation
+{
+    TOP = 0, RIGHT, BOTTOM, LEFT
+};
+
 //Texture index
 enum TextureIndex
 {
@@ -40,6 +46,11 @@ class Game
     const int MAX_FPS = 60;
 
     bool GameOver = false;
+
+    bool InMainMenu = true;
+    bool InDebug = false;
+
+    bool exit = false;
 
     
     //Textures
@@ -71,7 +82,6 @@ class Game
         UnloadTexture(tex_naga);
     }
 
-
     Texture2D AssignTexture(int index)
     {
         switch(index)
@@ -98,9 +108,40 @@ class Game
         return float(GetFPS())/float(MAX_FPS);
     }
 
-    bool GetGameStatus()
+    bool IsGameOver()
     {
         return GameOver;
+    }
+    void ModGameOver(bool status)
+    {
+        GameOver = status;
+    }
+
+    bool IsInMainMenu()
+    {
+        return InMainMenu;
+    }
+    void ModInMainMenu(bool status)
+    {
+        InMainMenu = status;
+    }
+
+    bool IsInDebug()
+    {
+        return InDebug;
+    }
+    void ModInDebug(bool status)
+    {
+        InDebug = status;
+    }
+
+    bool IsExit()
+    {
+        return exit;
+    }
+    void ModExit(bool status)
+    {
+        exit = status;
     }
 
     int GetWindowWidth()
@@ -112,14 +153,92 @@ class Game
         return WindowHeight;
     }
 
-    void ModGameStatus(bool status)
-    {
-        GameOver = status;
-    }
+    
 };
 
 //Game class declaration
 Game game;
+
+//Menu, UI, HUD
+class Button
+{
+    protected:
+    Rectangle ButtonBox;
+    Vector2 CenterPoint;
+    
+    public:
+    Button(Vector2 position)
+    {
+        this->CenterPoint = position;
+        this->ButtonBox = {CenterPoint.x, CenterPoint.y, 0, 0};
+    }
+    virtual void Update() = 0;
+    virtual void Draw() = 0;
+};
+
+class ButtonDebug:public Button
+{
+    private:
+    char text[6] = "Debug";
+    Texture2D texture;
+    Rectangle TextureFrame;
+
+    public:
+    ButtonDebug(Vector2 position):Button(position)
+    {
+        this->ButtonBox = {CenterPoint.x-MeasureText(text, 40)/2.0f, CenterPoint.y, float(MeasureText(text, 40)), 40};
+    }
+    void Update() override
+    {
+        if(CheckCollisionPointRec(GetMousePosition(), ButtonBox))
+        {
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                game.ModInMainMenu(false);
+                game.ModInDebug(true);
+            }
+        }
+    }
+
+    void Draw() override
+    {
+        DrawText(text, CenterPoint.x-MeasureText(text, 40)/2.0f, CenterPoint.y, 40, BLACK);
+        //DrawRectangleRec(ButtonBox, BLACK);
+    }
+
+};
+
+class StatusBar
+{
+    private:
+    Rectangle bar;
+    float BarPercentage = 1;
+    float *MaxStatsValue;
+    float *StatsValue;
+    Vector2 CenterPoint;
+    Color color;
+
+    public:
+    StatusBar(Vector2& position, Color color, float& MaxStatsValue, float& StatsValue)
+    {
+        this->CenterPoint = position;
+        this->bar = {CenterPoint.x-(bar.width/BarPercentage), CenterPoint.y - bar.height, 50*BarPercentage, 10};
+        this->color = color;
+        this->MaxStatsValue = &MaxStatsValue;
+        this->StatsValue = &StatsValue;
+    }
+    void Update()
+    {
+        BarPercentage = *StatsValue / *MaxStatsValue;
+        bar.x = CenterPoint.x-25;
+        bar.y = CenterPoint.y-bar.height-30;
+        bar.width = 50*BarPercentage;
+    }
+     void Draw()
+     {
+        DrawRectangleRec(bar, color);
+     }
+};
 
 //Class
 class Entity
@@ -145,6 +264,8 @@ class Entity
 
     bool FacingRight = true;
 
+    bool MovementAllowed = true;
+
     //Frame & position related
     Vector2 position;
     Rectangle TextureFrame;
@@ -156,7 +277,7 @@ class Entity
     
     public:
     //Constructor & destructor
-    Entity(float health, float defense, float attack, float speed, Vector2 position, Texture2D texture)
+    Entity(float health, float defense, float attack, float speed, Vector2 position)
     {
         this->health = health;
         this->MaxHealth = health;
@@ -165,7 +286,6 @@ class Entity
         this->speed = speed;
         this->speedV = {this->speed, this->speed};
         this->position = position;
-        this->texture = texture;
     }
     ~Entity()
     {
@@ -178,6 +298,10 @@ class Entity
     float GetHealth()
     {
         return health;
+    }
+    float GetMaxHealth()
+    {
+        return MaxHealth;
     }
     float GetDef()
     {
@@ -221,6 +345,11 @@ class Entity
     }
 
     //Position related
+    void SetPos(Vector2 position)
+    {
+        this->position = position;
+    }
+
     Vector2 GetPos()
     {
         return position;
@@ -297,10 +426,26 @@ class Entity
         }
     }
 
+    virtual void MeleeHit(Entity& target)
+    {
+        if(CheckCollisionPointRec(MeleeAttackPoint, target.GetHitbox()) && TrigMelee && target.GetLiveStatus() && !target.IsHitByMelee())
+        {
+            target.TakeDamage(attack);
+            target.ModHitByMelee(true);
+        }
+        if(MeleeAttackSwingRad == MeleeAttackSwingRadOri)
+        {
+            target.ModHitByMelee(false);
+        }
+    }
+
     //Movement related
     void MoveRight()
     {
-        position.x += speedV.x/game.ScaleFPS();
+        if(MovementAllowed)
+        {
+            position.x += speedV.x/game.ScaleFPS();
+        }
         if(!FacingRight)
         {
             TextureFrame.width *= -1.0;
@@ -309,7 +454,10 @@ class Entity
     }
     void MoveLeft()
     {
-        position.x -= speedV.x/game.ScaleFPS();
+        if(MovementAllowed)
+        {
+            position.x -= speedV.x/game.ScaleFPS();
+        }
         if(FacingRight)
         {
             TextureFrame.width *= -1.0;
@@ -318,11 +466,26 @@ class Entity
     }
     void MoveUp()
     {
-        position.y -= speedV.y/game.ScaleFPS();
+        if(MovementAllowed)
+        {
+            position.y -= speedV.y/game.ScaleFPS();
+        }
     }
     void MoveDown()
     {
-        position.y += speedV.y/game.ScaleFPS();
+        if(MovementAllowed)
+        {
+            position.y += speedV.y/game.ScaleFPS();
+        }
+    }
+
+    bool IsMovementAllowed()
+    {
+        return MovementAllowed;
+    }
+    void ModMovementAllowed(bool status)
+    {
+        MovementAllowed = status;
     }
 
     //Reset state function
@@ -352,18 +515,6 @@ class Entity
     {
         
     }
-    void MeleeHit(Entity& target)
-    {
-        if(CheckCollisionPointRec(MeleeAttackPoint, target.GetHitbox()) && TrigMelee && target.GetLiveStatus() && !target.IsHitByMelee())
-        {
-            target.TakeDamage(attack);
-            target.ModHitByMelee(true);
-        }
-        if(MeleeAttackSwingRad == MeleeAttackSwingRadOri)
-        {
-            target.ModHitByMelee(false);
-        }
-    }
 
     //Update & draw
     virtual void Update()
@@ -384,25 +535,20 @@ class Player:public Entity
     int AttackMode;
     float ShieldHealth;
 
-    int PlayerAmmo = 10;
+    int MAX_AMMO = 10;
+    int ammo = 10;
 
 
     public:
     int const MAX_BULLET = 50;
 
     //Constructor & destructor
-    Player(float health, float defense, float attack, float speed, Vector2 position, Texture2D texture):Entity(health, defense, attack, speed, position, texture)
+    Player(float health, float defense, float attack, float speed, Vector2 position):Entity(health, defense, attack, speed, position)
     {
         //Stats
-        this->health = health;
-        this->MaxHealth = health;
-        this->defense = defense;
-        this->attack = attack;
-        this->speed = speed;
-        this->speedV = {this->speed, this->speed};
-        this->position = position;
-        this->texture = texture;
         this->ShieldHealth = 500;
+
+        this->texture = game.AssignTexture(TEX_PLAYER);
 
         //Frame & Hitbox
         this->TextureFrame = {0, 0, 16, 16};
@@ -437,13 +583,20 @@ class Player:public Entity
         }
 
         //Shot
-        if(IsKeyPressed(KEY_SPACE))
+        if(IsKeyPressed(KEY_SPACE) && ammo > 0)
         {
             ModShotState(true);
+            ammo--;
         }
         else if(IsKeyReleased(KEY_SPACE))
         {
             ModShotState(false);
+        }
+
+        //Reload
+        if(IsKeyPressed(KEY_R))
+        {
+            ammo = MAX_AMMO;
         }
 
         //Melee
@@ -489,8 +642,6 @@ class Player:public Entity
         }
         
         MeleeAttackPoint = MeleeAttackPointOri;
-
-
     }
 
     //Draw related
@@ -498,8 +649,11 @@ class Player:public Entity
     {
         //DrawTexturePro(texture, frame, Hitbox, {Hitbox.width/2.0f, Hitbox.height/2.0f}, 0, WHITE);
         DrawTexturePro(texture, TextureFrame, DestFrame, {DestFrame.width/2.0f, DestFrame.height/2.0f}, 0, WHITE);
-        DrawCircle(MeleeAttackPoint.x, MeleeAttackPoint.y, 10, RED);
-        DrawText(TextFormat("%f", FacingRight), 100, 0, 20, BLACK);
+        if(TrigMelee)
+        {
+            DrawCircle(MeleeAttackPoint.x, MeleeAttackPoint.y, 10, RED);
+        }
+        DrawText(TextFormat("%d/%d", ammo, MAX_AMMO), 100, 0, 20, BLACK);
     }
 };
 
@@ -520,9 +674,10 @@ class EnemyMeleeBasic:public Entity
     private:
     int AbilityMode;
     int EnemyType;
+    StatusBar *HealthBar;
 
     public:
-    EnemyMeleeBasic(Vector2 position):Entity(0, 0, 0, 0, position, texture)
+    EnemyMeleeBasic(Vector2 position):Entity(0, 0, 0, 0, position)
     {
             this->health = 50;
             this->MaxHealth = health;
@@ -538,6 +693,11 @@ class EnemyMeleeBasic:public Entity
             this->DestFrame = {position.x, position.y, 100, 100};
             this->Hitbox = {this->DestFrame.x-this->DestFrame.width/2.0f, this->DestFrame.y-this->DestFrame.height/2.0f, this->DestFrame.width, this->DestFrame.height-30};
             this->CenterPoint = position;
+
+            this->MeleeAttackPointOri = {CenterPoint.x + 20, CenterPoint.y - 10};
+            this->MeleeAttackPoint = MeleeAttackPointOri;
+
+            HealthBar = new StatusBar(position, RED, MaxHealth, health);
     }
 
     void Update() override
@@ -549,6 +709,7 @@ class EnemyMeleeBasic:public Entity
         if(IsAlive)
         {
             UpdateHitbox();
+            HealthBar->Update();
         }
     }
 
@@ -561,20 +722,51 @@ class EnemyMeleeBasic:public Entity
         Hitbox.y = DestFrame.y - DestFrame.height/2.0f;
     }
 
+    void UpdateMelee() override
+    {
+        if(TrigMelee && IsAlive && MeleeAttackPoint.y < MeleeAttackPointOri.y+20)
+        {
+            MeleeAttackPoint.y += 0.2;
+        }
+        else
+        {
+            TrigMelee = false;
+            MeleeAttackPoint = MeleeAttackPointOri;
+        }
+        if(FacingRight)
+        {
+            MeleeAttackPointOri = {CenterPoint.x + 20, CenterPoint.y - 10};
+            MeleeAttackPoint = MeleeAttackPointOri;
+        }
+        else
+        {
+            MeleeAttackPointOri = {CenterPoint.x - 20, CenterPoint.y - 10};
+            MeleeAttackPoint = MeleeAttackPointOri;
+        }
+    }
+
+    void DetectMeleeRange()
+    {
+        
+    }
+
+    void MeleeHit(Entity& target) override
+    {
+
+    }
+
     void Draw() override
     {
         if(IsAlive)
         {
             DrawTexturePro(texture, TextureFrame, DestFrame, {DestFrame.width/2.0f, DestFrame.height/2.0f}, 0, WHITE);
-            DrawText(TextFormat("%.1f/%.1f", health, MaxHealth), position.x-MeasureText(TextFormat("%.1f/%.1f", health, MaxHealth), 15)/2, position.y-30, 15, RED);
+            HealthBar->Draw();
         }
     }
 
 };
 
 //Attack type class
-
-
 //Projectile
 class Projectile
 {
@@ -630,10 +822,6 @@ class Bullet:public Projectile
     public:
     Bullet(float speed, Vector2 position, Texture2D texture, Entity& entity):Projectile(speed, position)
     {
-        this->speed = speed;
-        this->speedV = {speed, speed};
-        this->position = position;
-        this->origin = position;
         this->texture = texture;
         this->entity = &entity;
 
@@ -749,6 +937,7 @@ class Bullet:public Projectile
     }
 };
 
+//Protect box
 class ProtectBox
 {
     private:
@@ -759,7 +948,7 @@ class ProtectBox
     ProtectBox(Vector2 position)
     {
         this->position = position;
-        this->box = {position.x, position.y, 40, 40};
+        this->box = {position.x - 20, position.y - 20, 40, 40};
     }
 
     void Draw()
@@ -771,24 +960,70 @@ class ProtectBox
     {
         if(CheckCollisionRecs(box, enemy.GetHitbox()))
         {
-            game.ModGameStatus(false);
+            game.ModGameOver(false);
         }
     }
 };
 
-
-//Menu, UI, HUD
-class Button
+//Wall, obstacle, etc.
+class Wall
 {
     private:
-    Rectangle ButtonBox;
+    Vector2 position;
     Vector2 CenterPoint;
+    struct Size
+    {
+        float width;
+        float height;
+    };
+    Size size;
+    Rectangle Hitbox;
+    int orientation; 
 
-};
+    public:
+    Wall(Vector2 position, Size size, int orientation)
+    {
+        this->position = position;
+        this->CenterPoint = position;
+        this->size = size;
 
-class StatusBar
-{
+        this->Hitbox = {CenterPoint.x - size.width/2.0f, CenterPoint.y - size.height/2.0f, size.width, size.height};
+        this->orientation = orientation;
+    }
 
+    void Update(Entity& entity)
+    {
+        DetectCollision(entity);
+    }
+
+    void DetectCollision(Entity& entity)
+    {
+        if(CheckCollisionRecs(Hitbox, entity.GetHitbox()))
+        {
+            if((CenterPoint.x - entity.GetCenterPoint().x) > 0 && (entity.GetCenterPoint().y > (CenterPoint.y - Hitbox.height/2.0f) && entity.GetCenterPoint().y < (CenterPoint.y + Hitbox.height/2.0f)))
+            {
+                entity.SetPos({(CenterPoint.x - Hitbox.width/2.0f - entity.GetHitbox().width/2.0f), entity.GetPos().y});
+            }
+            else if((CenterPoint.x - entity.GetCenterPoint().x) < 0 && (entity.GetCenterPoint().y > (CenterPoint.y - Hitbox.height/2.0f) && entity.GetCenterPoint().y < (CenterPoint.y + Hitbox.height/2.0f)))
+            {
+                entity.SetPos({(CenterPoint.x + Hitbox.width/2.0f + entity.GetHitbox().width/2.0f), entity.GetPos().y});
+            }
+            else if((CenterPoint.y - entity.GetCenterPoint().y) > 0)
+            {
+                entity.SetPos({entity.GetPos().x, CenterPoint.y - Hitbox.height/2.0f - entity.GetHitbox().height/2.0f});
+            }
+            else if((CenterPoint.y - entity.GetCenterPoint().y) < 0)
+            {
+                entity.SetPos({entity.GetPos().x, CenterPoint.y + Hitbox.height/2.0f + entity.GetHitbox().height/2.0f});
+            }
+        }
+    }
+
+    void Draw()
+    {
+        DrawRectangleRec(Hitbox, GREEN);
+    }
+    
 };
 
 //Game related functions (nanti dibuat jadi class)
@@ -799,11 +1034,14 @@ class Debug
     EnemyMeleeBasic *enemy;
     vector<Bullet> bullet;
 
+    Wall *wall;
+
     public:
     Debug()
     {
-        this->player = new Player(100, 10, 30, 5, {200, 400}, game.AssignTexture(TEX_PLAYER));
-        this->enemy = new EnemyMeleeBasic({400, 400});
+        this->player = new Player(100, 10, 30, 5, {200, 400});
+        this->enemy = new EnemyMeleeBasic({500, 400});
+        this->wall = new Wall({600, 200}, {300, 60}, TOP);
 
         for(int i = 0; i < player->MAX_BULLET; i++)
         {
@@ -812,7 +1050,9 @@ class Debug
     }
     ~Debug()
     {
-
+        delete player;
+        delete enemy;
+        bullet.clear();
     }
     void Draw()
     {
@@ -822,6 +1062,7 @@ class Debug
 
         player->Draw();
         
+        wall->Draw();
 
         enemy->Draw();
 
@@ -830,12 +1071,14 @@ class Debug
             bullet[i].Draw();
         }
 
+        DrawText(TextFormat("%.2f/%.2f", player->GetHealth(), player->GetMaxHealth()), 600, 0, 20, RED);
+
         EndDrawing();
     }
 
     void Update()
     {
-        if(!game.GetGameStatus())
+        if(!game.IsGameOver())
         {
             player->Update();
             for(int i = 0; i < player->MAX_BULLET; i++)
@@ -849,7 +1092,45 @@ class Debug
             {
                 bullet[i].DetectCollisionEntity(*enemy);
             }
+
+            wall->Update(*player);
+
+            //manual exit
+            if(IsKeyPressed(KEY_ESCAPE))
+            {
+                game.ModExit(true);
+            }
         }   
+    }
+};
+
+class MainMenu
+{
+    private:
+    ButtonDebug *DebugButton;
+
+    public:
+    MainMenu()
+    {
+        DebugButton = new ButtonDebug({400, 400});
+        cout<<"Main Menu created"<<endl;
+    }
+    ~MainMenu()
+    {
+        delete DebugButton;
+    }
+    void Update()
+    {
+        DebugButton->Update();
+    }
+    void Draw()
+    {
+        BeginDrawing();
+
+        ClearBackground(WHITE);
+        DebugButton->Draw();
+
+        EndDrawing();
     }
 };
 
@@ -861,12 +1142,49 @@ int main()
     game.GameInit();
     game.TextureLoad();
 
-    Debug debug;
+    bool CreateObject = true;
 
-    while(!WindowShouldClose())
+    Debug *debug;
+    MainMenu *main_menu;
+
+    while(!game.IsExit())
     {
-        debug.Update();
-        debug.Draw();
+        while(game.IsInMainMenu())
+        {
+            if(CreateObject)
+            {
+                main_menu = new MainMenu;
+                CreateObject = false;
+            }
+            
+            main_menu->Update();
+            main_menu->Draw();
+
+            if(!game.IsInMainMenu())
+            {
+                main_menu->~MainMenu();
+                CreateObject = true;
+                break;
+            }
+        }
+        while(game.IsInDebug())
+        {
+            if(CreateObject)
+            {
+                debug = new Debug;
+                CreateObject = false;
+            }
+
+            debug->Update();
+            debug->Draw();
+
+            if(!game.IsInDebug() || game.IsExit())
+            {
+                debug->~Debug();
+                CreateObject = true;
+                break;
+            }
+        }
     }
 
     game.TextureUnload();
@@ -884,7 +1202,7 @@ int main()
             {
                 kadal[i].ResetState();
             }
-            game.ModGameStatus(false);
+            game.ModGameOver(false);
         }        
     }*/
     
