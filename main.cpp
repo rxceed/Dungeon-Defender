@@ -414,11 +414,18 @@ class GameOverPanel
     ButtonExit *ExitButton;
     ButtonRetry *RetryButton;
     ButtonMainMenu *MainMenuButton;
-
+    
+    Vector2 CenterPoint = {game.GetWindowWidth(), game.GetWindowHeight()};
+    Rectangle MainPanel;
+    Rectangle PanelBorder;
 
 
     public:
-    
+    GameOverPanel()
+    {
+        PanelBorder = {CenterPoint.x, CenterPoint.y, };
+        MainPanel = {CenterPoint.x, CenterPoint.y, };
+    }
 };
 
 class StatusBar
