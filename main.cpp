@@ -35,7 +35,7 @@ enum Orientation
 //Texture index
 enum TextureIndex
 {
-    TEX_PLAYER = 0, TEX_BULLET, TEX_KADAL, TEX_NAGA
+    TEX_PLAYER = 0, TEX_BULLET, TEX_KADAL, TEX_NAGA, TEX_SWORDS
 };
 
 
@@ -49,6 +49,7 @@ class Game
 
     bool GameOver = false;
     bool ResetStage = false;
+    bool pause = false;
 
     bool InMainMenu = true;
     bool InDebug = false;
@@ -64,7 +65,7 @@ class Game
 
     
     //Textures
-    Texture2D tex_player, tex_bullet, tex_naga, tex_kadal;
+    Texture2D tex_player, tex_bullet, tex_naga, tex_kadal, tex_swords;
     
     public:
     //Camera
@@ -84,6 +85,7 @@ class Game
         tex_player = LoadTexture("assets/test_box_player.png");
         tex_kadal = LoadTexture("assets/kadal.png");
         tex_naga = LoadTexture("assets/naga.png");
+        tex_swords = LoadTexture("assets/sword.png");
     }
     void TextureUnload()
     {
@@ -91,6 +93,7 @@ class Game
         UnloadTexture(tex_player);
         UnloadTexture(tex_kadal);
         UnloadTexture(tex_naga);
+        UnloadTexture(tex_swords);
     }
 
     Texture2D AssignTexture(int index)
@@ -108,6 +111,9 @@ class Game
             break;
         case 3:
             return tex_naga;
+            break;
+        case 4:
+            return tex_swords;
             break;
         default:
             break;
@@ -146,6 +152,15 @@ class Game
     void ModResetStage(bool status)
     {
         ResetStage = status;
+    }
+
+    bool IsPaused()
+    {
+        return pause;
+    }
+    void ModPause(bool status)
+    {
+        pause = status;
     }
 
     bool IsInMainMenu()
@@ -361,6 +376,8 @@ class ButtonMainMenu:public Button
                 game.ModInMainMenu(true);
                 game.ModInStageSelect(false);
                 game.ModInStageOne(false);
+
+                game.ModGameOver(false);
             }
         }
     }
@@ -403,6 +420,28 @@ class ButtonRetry:public Button
             if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
             {
                 game.ModResetStage(true);
+                game.ModGameOver(false);
+            }
+        }
+    }
+};
+
+class ButtonResume:public Button
+{
+    public:
+    ButtonResume(Vector2 position, Color TextColor):Button(position, TextColor)
+    {
+        this->text = new char[7]{"Resume"};
+        this->FontSize = 40;
+        this->ButtonBox = {CenterPoint.x-MeasureText(text, FontSize)/2.0f, CenterPoint.y, float(MeasureText(text, FontSize)), float(FontSize)};
+    }
+    void Update() override
+    {
+        if(CheckCollisionPointRec(GetMousePosition(), ButtonBox))
+        {
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                game.ModPause(false);
             }
         }
     }
@@ -415,16 +454,109 @@ class GameOverPanel
     ButtonRetry *RetryButton;
     ButtonMainMenu *MainMenuButton;
     
-    Vector2 CenterPoint = {game.GetWindowWidth(), game.GetWindowHeight()};
+    float PanelWidth = 800;
+    float PanelHeight = 500;
+    Vector2 CenterPoint = {float(game.GetWindowWidth()/2.0f), float(game.GetWindowHeight()/2.0f)};
     Rectangle MainPanel;
     Rectangle PanelBorder;
 
+    struct GameOverText
+    {
+        char text[10];
+        int FontSize;
+        Color TextColor;
+        float x, y;
+    };
+    
+    GameOverText *TextGameOver;
 
     public:
     GameOverPanel()
     {
-        PanelBorder = {CenterPoint.x, CenterPoint.y, };
-        MainPanel = {CenterPoint.x, CenterPoint.y, };
+        PanelBorder = {CenterPoint.x-PanelWidth/2.0f, CenterPoint.y-PanelHeight/2.0f, PanelWidth, PanelHeight};
+        MainPanel = {CenterPoint.x-(PanelWidth-20)/2.0f, CenterPoint.y-(PanelHeight-20)/2.0f, PanelWidth-20, PanelHeight-20};
+        TextGameOver = new GameOverText{"GAME OVER", 60, RED, CenterPoint.x, CenterPoint.y-100};
+        ExitButton = new ButtonExit({CenterPoint.x+200, CenterPoint.y+100}, BLACK);
+        RetryButton = new ButtonRetry({CenterPoint.x, CenterPoint.y+100}, BLACK);
+        MainMenuButton = new ButtonMainMenu({CenterPoint.x-200, CenterPoint.y+100}, BLACK);
+    }
+    void Update()
+    {
+        if(game.IsGameOver())
+        {
+            ExitButton->Update();
+            RetryButton->Update();
+            MainMenuButton->Update();
+        }
+    }
+    void Draw()
+    {
+        if(game.IsGameOver())
+        {
+            DrawRectangleRec(PanelBorder, BLACK);
+            DrawRectangleRec(MainPanel, WHITE);
+            DrawText(TextGameOver->text, TextGameOver->x-MeasureText(TextGameOver->text, TextGameOver->FontSize)/2.0f, TextGameOver->y, TextGameOver->FontSize, TextGameOver->TextColor);
+            ExitButton->Draw();
+            RetryButton->Draw();
+            MainMenuButton->Draw();
+            
+        }
+    }
+};
+
+class PausePanel
+{    
+    private:
+    ButtonExit *ExitButton;
+    ButtonMainMenu *MainMenuButton;
+    ButtonResume *ResumeButton;
+    
+    float PanelWidth = 800;
+    float PanelHeight = 500;
+    Vector2 CenterPoint = {float(game.GetWindowWidth()/2.0f), float(game.GetWindowHeight()/2.0f)};
+    Rectangle MainPanel;
+    Rectangle PanelBorder;
+
+    struct PauseText
+    {
+        char text[6];
+        int FontSize;
+        Color TextColor;
+        float x, y;
+    };
+    
+    PauseText *TextPause;
+
+    public:
+    PausePanel()
+    {
+        PanelBorder = {CenterPoint.x-PanelWidth/2.0f, CenterPoint.y-PanelHeight/2.0f, PanelWidth, PanelHeight};
+        MainPanel = {CenterPoint.x-(PanelWidth-20)/2.0f, CenterPoint.y-(PanelHeight-20)/2.0f, PanelWidth-20, PanelHeight-20};
+        TextPause = new PauseText{"PAUSE", 60, BLACK, CenterPoint.x, CenterPoint.y-100};
+        ExitButton = new ButtonExit({CenterPoint.x+200, CenterPoint.y+100}, BLACK);
+        ResumeButton = new ButtonResume({CenterPoint.x, CenterPoint.y+100}, BLACK);
+        MainMenuButton = new ButtonMainMenu({CenterPoint.x-200, CenterPoint.y+100}, BLACK);
+    }
+    void Update()
+    {
+        if(game.IsPaused())
+        {
+            ExitButton->Update();
+            ResumeButton->Update();
+            MainMenuButton->Update();
+        }
+    }
+    void Draw()
+    {
+        if(game.IsPaused())
+        {
+            DrawRectangleRec(PanelBorder, BLACK);
+            DrawRectangleRec(MainPanel, WHITE);
+            DrawText(TextPause->text, TextPause->x-MeasureText(TextPause->text, TextPause->FontSize)/2.0f, TextPause->y, TextPause->FontSize, TextPause->TextColor);
+            ExitButton->Draw();
+            ResumeButton->Draw();
+            MainMenuButton->Draw();
+        }
     }
 };
 
@@ -439,11 +571,14 @@ class StatusBar
     Vector2 CenterPoint;
     Color color;
 
+    Rectangle border;
+
     public:
     StatusBar(Vector2 position, float width, float height, Color color, float MaxStatsValue, float StatsValue)
     {
         this->CenterPoint = position;
-        this->bar = {CenterPoint.x-float((bar.width/BarPercentage)), CenterPoint.y - float(bar.height), width*BarPercentage, height};
+        this->bar = {CenterPoint.x-float((bar.width/BarPercentage)/2.0f), CenterPoint.y - float(bar.height)/2.0f, width*BarPercentage, height};
+        this->border = {CenterPoint.x-float(border.width)/2.0f, CenterPoint.y - float(border.height)/2.0f, width+20, height+20};
         this->width = width;
         this->color = color;
         this->MaxStatsValue = MaxStatsValue;
@@ -453,14 +588,21 @@ class StatusBar
     {
         CenterPoint = position;
         BarPercentage = StatsValue / MaxStatsValue;
-        bar.x = CenterPoint.x-25;
-        bar.y = CenterPoint.y-bar.height-30;
+        bar.x = CenterPoint.x-width/2.0f;
+        bar.y = CenterPoint.y-bar.height/2.0f-30;
         bar.width = width*BarPercentage;
+        border.x = CenterPoint.x-border.width/2.0f;
+        border.y = CenterPoint.y-border.height/2.0f-30;
 
         //cout<<CenterPoint->x<<" "<<CenterPoint->y<<endl;
     }
      void Draw()
      {
+        DrawRectangleRec(bar, color);
+     }
+     void Draw(Color BorderColor)
+     { 
+        DrawRectangleRec(border, BorderColor);
         DrawRectangleRec(bar, color);
      }
 };
@@ -499,6 +641,7 @@ class Entity
 
     //Frame & position related
     Vector2 position;
+    Vector2 PreviousPosition;
     Rectangle TextureFrame;
     Rectangle DestFrame;
     Rectangle Hitbox;
@@ -517,6 +660,7 @@ class Entity
         this->speed = speed;
         this->speedV = {this->speed, this->speed};
         this->position = position;
+        this->PreviousPosition = position;
     }
     ~Entity()
     {
@@ -554,7 +698,15 @@ class Entity
 
     bool GetLiveStatus()
     {
-        return IsAlive;
+        if(health <= 0)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+        
     }
 
     //stats modification
@@ -579,11 +731,16 @@ class Entity
     void SetPos(Vector2 position)
     {
         this->position = position;
+        this->PreviousPosition = position;
     }
 
     Vector2 GetPos()
     {
         return position;
+    }
+    Vector2 GetPrevPos()
+    {
+        return PreviousPosition;
     }
     Vector2 GetCenterPoint()
     {
@@ -663,30 +820,35 @@ class Entity
     {
         if(MovementAllowed)
         {
+            PreviousPosition = position;
             position.x += speedV.x/game.ScaleFPS();
+            if(!FacingRight)
+            {
+                //TextureFrame.width *= -1.0;
+                FacingRight = true;
+            }
         }
-        if(!FacingRight)
-        {
-            TextureFrame.width *= -1.0;
-            FacingRight = true;
-        }
+        
     }
     void MoveLeft()
     {
         if(MovementAllowed)
         {
+            PreviousPosition = position;
             position.x -= speedV.x/game.ScaleFPS();
+            if(FacingRight)
+            {
+                //TextureFrame.width *= -1.0;
+                FacingRight = false;
+            }
         }
-        if(FacingRight)
-        {
-            TextureFrame.width *= -1.0;
-            FacingRight = false;
-        }
+        
     }
     void MoveUp()
     {
         if(MovementAllowed)
         {
+            PreviousPosition = position;
             position.y -= speedV.y/game.ScaleFPS();
         }
     }
@@ -694,6 +856,7 @@ class Entity
     {
         if(MovementAllowed)
         {
+            PreviousPosition = position;
             position.y += speedV.y/game.ScaleFPS();
         }
     }
@@ -760,9 +923,17 @@ class Player:public Entity
     int AttackMode;
     float ShieldHealth;
 
-    int MAX_AMMO = 10;
-    int ammo = 10;
+    int MagSize = 20;
+    int AmmoLoaded = 20;
+    int AmmoReserve = 40;
 
+    StatusBar *HealthBar;
+    Vector2 HealthBarPosition;
+
+    Texture2D SwordTexture = game.AssignTexture(TEX_SWORDS);
+    Rectangle SwordTextureFrame = {32, 16, 16, 16};
+    Rectangle SwordDestFrame;
+    float SwordRotationDeg;
 
     public:
     int const MAX_BULLET = 50;
@@ -781,11 +952,18 @@ class Player:public Entity
         this->Hitbox = {this->DestFrame.x-this->DestFrame.width/2.0f, this->DestFrame.y-this->DestFrame.height/2.0f, this->DestFrame.width, this->DestFrame.height};
         this->CenterPoint = position;
 
+        this->SwordDestFrame = {DestFrame.x + 40, DestFrame.y, 32, 32};
+        this->SwordRotationDeg = 0;
+
         this->MeleeAttackPointOri = {CenterPoint.x + float((Hitbox.width/2.0f+30)*cos(MeleeAttackSwingRad)), CenterPoint.y - float((Hitbox.height/2.0f+30)*sin(MeleeAttackSwingRad))};
         this->MeleeAttackPoint = MeleeAttackPointOri;
         this->MeleeAttackSwingRadOri = float(1.0/4.0);
         this->MeleeAttackSwingRad = MeleeAttackSwingRadOri;
-        this->AtkCooldown = 0.4;
+        this->AtkCooldown = 0.2;
+
+        //HUD
+        HealthBarPosition = {200, 60};
+        HealthBar = new StatusBar(HealthBarPosition, 300, 20, RED, MaxHealth, health);
     };
 
     void DetectInput()
@@ -801,18 +979,45 @@ class Player:public Entity
         }
         if(IsKeyDown(KEY_D))
         {
+            bool LockDirection;
+            if(IsKeyDown(KEY_LEFT_SHIFT) && IsFacingRight())
+            {
+                LockDirection = false;
+            }
+            else if(IsKeyDown(KEY_LEFT_SHIFT) && !IsFacingRight())
+            {
+                LockDirection = true;
+            }
             MoveRight();
+            if(LockDirection)
+            {
+                FacingRight = false;
+            }
+            
         }
         if(IsKeyDown(KEY_A))
         {
+            bool LockDirection;
+            if(IsKeyDown(KEY_LEFT_SHIFT) && IsFacingRight())
+            {
+                LockDirection = true;
+            }
+            else if(IsKeyDown(KEY_LEFT_SHIFT) && !IsFacingRight())
+            {
+                LockDirection = false;
+            }
             MoveLeft();
+            if(LockDirection)
+            {
+                FacingRight = true;
+            }
         }
 
         //Shot
-        if(IsKeyPressed(KEY_SPACE) && ammo > 0)
+        if(IsKeyPressed(KEY_SPACE) && AmmoLoaded > 0)
         {
             ModShotState(true);
-            ammo--;
+            AmmoLoaded--;
         }
         else if(IsKeyReleased(KEY_SPACE))
         {
@@ -822,15 +1027,34 @@ class Player:public Entity
         //Reload
         if(IsKeyPressed(KEY_R))
         {
-            ammo = MAX_AMMO;
+            for(int i = AmmoLoaded; i < MagSize; i++)
+            {
+                AmmoLoaded++;
+                AmmoReserve--;
+            }
+
         }
 
         //Melee
-        if(IsKeyPressed(KEY_V) && TrigAttack)
+        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && TrigAttack)
         {
             ModMeleeState(true);
         }
 
+    }
+
+    //Get & mod stats
+    int GetAmmoLoaded()
+    {
+        return AmmoLoaded;
+    }
+    int GetAmmoReserve()
+    {
+        return AmmoReserve;
+    }
+    void AddAmmo(int amount)
+    {
+        AmmoReserve += amount;
     }
 
     //Update related
@@ -838,8 +1062,40 @@ class Player:public Entity
     {
         DetectInput();
         UpdateDestFrame();
+        UpdateSwordDestFrame();
         UpdateHitbox();
+        UpdateTextureFrame();
+        UpdateSwordTextureFrame();
         UpdateMelee();
+        HealthBar->Update(HealthBarPosition, MaxHealth, health);
+    }
+
+    void UpdateTextureFrame()
+    {
+        if((IsFacingRight() && TextureFrame.width < 0) || (!IsFacingRight() && TextureFrame.width > 0))
+        {
+            TextureFrame.width *= -1;
+        }
+    }
+    void UpdateSwordDestFrame()
+    {
+        if(IsFacingRight())
+        {
+            SwordDestFrame.x = DestFrame.x+40;
+            SwordDestFrame.y = DestFrame.y;
+        }
+        else
+        {
+            SwordDestFrame.x = DestFrame.x-40;
+            SwordDestFrame.y = DestFrame.y;
+        }
+    }
+    void UpdateSwordTextureFrame()
+    {
+        if((IsFacingRight() && SwordTextureFrame.width < 0) || (!IsFacingRight() && SwordTextureFrame.width > 0))
+        {
+            SwordTextureFrame.width *= -1;
+        }
     }
 
     void UpdateMelee() override
@@ -847,6 +1103,7 @@ class Player:public Entity
         if(TrigMelee && (MeleeAttackSwingRad >= -(1.0/4.0)))
         {
             MeleeAttackSwingRad -= 0.1/game.ScaleFPS();
+            SwordRotationDeg += 10/game.ScaleFPS();
             CooldownCounter = game.GetTimer();
             TrigAttack = false;
             TrigMelee = true;
@@ -854,6 +1111,10 @@ class Player:public Entity
         else
         {
             TrigMelee = false;
+            if(TrigAttack)
+            {
+                SwordRotationDeg = 0;
+            }
             MeleeAttackSwingRad = MeleeAttackSwingRadOri;
             AttackCD();
         }
@@ -868,6 +1129,18 @@ class Player:public Entity
         
         MeleeAttackPoint = MeleeAttackPointOri;
     }
+    void MeleeHit(Entity& target) override
+    {
+        if(CheckCollisionPointRec(MeleeAttackPoint, target.GetHitbox()) && TrigMelee && target.GetLiveStatus() && !target.IsHitByMelee())
+        {
+            target.TakeDamage(attack*2.5);
+            target.ModHitByMelee(true);
+        }
+        if(MeleeAttackSwingRad == MeleeAttackSwingRadOri)
+        {
+            target.ModHitByMelee(false);
+        }
+    }
 
     //Draw related
     void Draw() override
@@ -878,11 +1151,13 @@ class Player:public Entity
         {
             DrawCircle(MeleeAttackPoint.x, MeleeAttackPoint.y, 10, RED);
         }
+        DrawTexturePro(SwordTexture, SwordTextureFrame, SwordDestFrame, {0, SwordDestFrame.height}, SwordRotationDeg, WHITE);
         //DrawText(TextFormat("%d/%d", ammo, MAX_AMMO), 100, 0, 20, BLACK);
     }
     void DrawUI()
     {
-        DrawText(TextFormat("%d/%d", ammo, MAX_AMMO), 100, 0, 20, BLACK);
+        DrawText(TextFormat("%d/%d", AmmoLoaded, AmmoReserve), 100, 50, 30, BLACK);
+        HealthBar->Draw(MAROON);
     }
 };
 
@@ -928,7 +1203,7 @@ class EnemyMeleeBasic:public Entity
             this->MeleeAttackPoint = MeleeAttackPointOri;
             this->AtkCooldown = 1;
 
-            HealthBar = new StatusBar(this->position, 50, 10, RED, this->MaxHealth, this->health);
+            HealthBar = new StatusBar(this->CenterPoint, 50, 10, RED, this->MaxHealth, this->health);
     }
 
     void Update() override
@@ -939,25 +1214,26 @@ class EnemyMeleeBasic:public Entity
         }
         if(IsAlive)
         {
+            UpdateDestFrame();
             UpdateHitbox();
+            UpdateTextureFrame();
             UpdateMelee();
             HealthBar->Update(position, MaxHealth, health);
         }
     }
-
-    void UpdateHitbox()
+    void UpdateTextureFrame()
     {
-        DestFrame.x = position.x;
-        DestFrame.y = position.y;
-        CenterPoint = position;
-        Hitbox.x = DestFrame.x - DestFrame.width/2.0f;
-        Hitbox.y = DestFrame.y - DestFrame.height/2.0f;
+        if((IsFacingRight() && TextureFrame.width < 0) || (!IsFacingRight() && TextureFrame.width > 0))
+        {
+            TextureFrame.width *= -1;
+        }
     }
 
     void UpdateMelee() override
     {
         if(TrigMelee && IsAlive && (MeleeAttackPoint.y < MeleeAttackPointOri.y+20))
         {
+            MeleeAttackPoint.x = MeleeAttackPointOri.x;
             MeleeAttackPoint.y = MeleeAttackPoint.y + 0.5/game.ScaleFPS();
             CooldownCounter = game.GetTimer();
             TrigAttack = false;
@@ -981,10 +1257,18 @@ class EnemyMeleeBasic:public Entity
 
     void DetectMeleeRange(Entity& target)
     {
-        if(TrigAttack && (CheckCollisionPointRec({CenterPoint.x - 50, CenterPoint.y}, target.GetHitbox()) || CheckCollisionPointRec({CenterPoint.x + 45, CenterPoint.y}, target.GetHitbox())))
+        if((CheckCollisionPointRec({CenterPoint.x - 50, CenterPoint.y}, target.GetHitbox()) || CheckCollisionPointRec({CenterPoint.x + 45, CenterPoint.y}, target.GetHitbox())))
         {
-            TrigMelee = true;
+            if(!CheckCollisionPointRec({CenterPoint.x - 50, CenterPoint.y}, target.GetHitbox()) && !IsFacingRight())
+            {
+                FacingRight = true;
+            }
+            if(TrigAttack)
+            {
+                TrigMelee = true;
+            }
             MovementAllowed = false;
+            
         }
     }
 
@@ -1012,6 +1296,102 @@ class EnemyMeleeBasic:public Entity
         }
     }
 
+};
+
+class EnemyRangedBasic:public Entity
+{
+    private:
+    bool ShotDelay = true;
+
+    StatusBar *HealthBar;
+
+    public:
+    EnemyRangedBasic(Vector2 position):Entity(0, 0, 0, 0, position)
+    {
+            this->health = 30;
+            this->MaxHealth = health;
+            this->defense = 10;
+            this->attack = 40;
+            this->position = position;
+            this->speed = 3;
+            this->speedV = {speed, speed};
+
+            this->texture = game.AssignTexture(TEX_KADAL);
+
+            this->TextureFrame = {12, 47, 78, 35};
+            this->DestFrame = {position.x, position.y, 78, 35};
+            this->Hitbox = {this->DestFrame.x-this->DestFrame.width/2.0f, this->DestFrame.y-this->DestFrame.height/2.0f, this->DestFrame.width, this->DestFrame.height};
+            this->CenterPoint = position;
+
+            //this->MeleeAttackPointOri = {CenterPoint.x + 45, CenterPoint.y - 10};
+            //this->MeleeAttackPoint = MeleeAttackPointOri;
+            this->AtkCooldown = 3;
+            this->CooldownCounter = game.GetTimer();
+
+            HealthBar = new StatusBar(this->CenterPoint, 50, 10, RED, this->MaxHealth, this->health);
+    }
+
+    void Update() override
+    {
+        if(health <= 0)
+        {
+            IsAlive = false;
+        }
+        if(IsAlive)
+        {
+            UpdateDestFrame();
+            UpdateHitbox();
+            UpdateTextureFrame();
+            UpdateShot();
+            HealthBar->Update(position, MaxHealth, health);
+        }
+    }
+
+    void UpdateTextureFrame()
+    {
+        if((IsFacingRight() && TextureFrame.width < 0) || (!IsFacingRight() && TextureFrame.width > 0))
+        {
+            TextureFrame.width *= -1;
+        }
+    }
+
+    void UpdateShot()
+    {
+        if(ShotDelay)
+        {
+            ShotDelay = false;
+            CooldownCounter = game.GetTimer();
+            ModMovementAllowed(false);
+        }
+        else
+        {
+            if(game.GetTimer() - CooldownCounter >= 0.5 && TrigAttack)
+            {
+                ModShotState(true);
+                TrigAttack = false;
+                //ShotDelay = true;
+            }
+        }
+        if(!TrigAttack)
+        {
+            if(game.GetTimer() - CooldownCounter >= 1)
+            {
+                ModMovementAllowed(true);
+                ModShotState(false);
+            }
+            AttackCD();
+            if(TrigAttack)
+            {
+                ShotDelay = true;
+            }
+        }
+    }
+
+    void Draw() override
+    {
+        DrawTexturePro(texture, TextureFrame, DestFrame, {DestFrame.width/2.0f, DestFrame.height/2.0f}, 0, WHITE);
+        HealthBar->Draw();
+    }
 };
 
 //Wall, obstacle, etc.
@@ -1358,7 +1738,9 @@ class Debug
     Player *player;
     EnemyMeleeBasic *enemy;
     EnemyMeleeBasic *enemy1;
+    EnemyRangedBasic *ranged;
     vector<Bullet> bullet;
+    vector<Bullet> EnemyBullet;
     vector<EnemyMeleeBasic> test;
 
     Wall *wall;
@@ -1371,6 +1753,7 @@ class Debug
         this->player = new Player(100, 10, 30, 5, {200, 400});
         this->enemy = new EnemyMeleeBasic({800, 200});
         this->enemy1 = new EnemyMeleeBasic({800, 400});
+        this->ranged = new EnemyRangedBasic({800, 700});
         enemy1->MoveLeft();
         enemy1->Update();
         this->wall = new Wall({600, 200}, {300, 60}, TOP, GREEN);
@@ -1378,6 +1761,10 @@ class Debug
         for(int i = 0; i < player->MAX_BULLET; i++)
         {
             bullet.push_back(Bullet(5, player->GetCenterPoint(), game.AssignTexture(TEX_BULLET), *player));
+        }
+        for(int i = 0; i < 100; i++)
+        {
+            EnemyBullet.push_back(Bullet(5, ranged->GetCenterPoint(), game.AssignTexture(TEX_BULLET), *ranged));
         }
         for(int i = 0; i < 3; i++)
         {
@@ -1389,6 +1776,7 @@ class Debug
     ~Debug()
     {
         delete player;
+        delete ranged;
         delete enemy;
         bullet.clear();
     }
@@ -1405,6 +1793,8 @@ class Debug
         enemy->Draw();
         enemy1->Draw();
 
+        ranged->Draw();
+
         for(int i = 0; i < player->MAX_BULLET; i++)
         {
             bullet[i].Draw();
@@ -1412,6 +1802,10 @@ class Debug
         for(int i = 0; i < 3; i++)
         {
             test[i].Draw();
+        }
+        for(int i = 0; i < 100; i++)
+        {
+            EnemyBullet[i].Draw();
         }
 
         DrawText(TextFormat("%.2f/%.2f", player->GetHealth(), player->GetMaxHealth()), 600, 0, 20, RED);
@@ -1440,6 +1834,13 @@ class Debug
             enemy1->Update();
             enemy1->DetectMeleeRange(*player);
             enemy1->MeleeHit(*player);
+
+            ranged->MoveRight();
+            ranged->Update();
+            for(int i = 0; i < 100; i++)
+            {
+                EnemyBullet[i].Update();
+            }
 
             for(int i = 0; i < 3; i++)
             {
@@ -1553,14 +1954,18 @@ class StageSelectMenu
 class StageOne
 {
     private:
-    const int KADAL_MID_COUNT = 20;
-    const int KADAL_TOP_COUNT = 13;
-    const int KADAL_BOTTOM_COUNT = 18;
+    const int KADAL_MID_COUNT = 10;
+    const int KADAL_TOP_COUNT = 5;
+    const int KADAL_BOTTOM_COUNT = 7;
 
     int wave = 1;
     bool SpawnWave = true;
     bool WaveCleared = false;
     int WaveKillCounter = 0;
+
+    vector<int> dead_kadal_mid;
+    vector<int> dead_kadal_top;
+    vector<int> dead_kadal_bottom;
 
     Player *player;
     vector<Bullet> PlayerBullet;
@@ -1570,6 +1975,9 @@ class StageOne
     ProtectBox *protect_box;
     vector<Wall> wall;
     vector<Tile> tile;
+
+    GameOverPanel *Panel_GameOver;
+    PausePanel *Panel_Pause;
 
     public:
     StageOne()
@@ -1599,12 +2007,30 @@ class StageOne
         {
             kadal_bottom.push_back(EnemyMeleeBasic({2000, 2000}));
         }
+        //Initial dead count
+        for(int i = 0; i < KADAL_MID_COUNT ;i++)
+        {
+            dead_kadal_mid.push_back(-1);
+        }
+        for(int i = 0; i < KADAL_TOP_COUNT ;i++)
+        {
+            dead_kadal_top.push_back(-1);
+        }
+        for(int i = 0; i < KADAL_BOTTOM_COUNT ;i++)
+        {
+            dead_kadal_bottom.push_back(-1);
+        }
         
         //Wall
-        wall.push_back(Wall({240, 130},{480, 260}, TOP, GRAY));
-        wall.push_back(Wall({648+1278/2.0f, 130},{1278, 260}, TOP, GRAY));
-        wall.push_back(Wall({1114/2.0f, 805+(1080-805)/2.0f},{1114, 1080-805}, TOP, GRAY));
-        wall.push_back(Wall({1362+(1920-1362)/2.0f, 805+(1080-805)/2.0f},{1920-1362, 1080-805}, TOP, GRAY));
+        wall.push_back(Wall({240, 170},{480, 340}, TOP, GRAY));
+        wall.push_back(Wall({648+1278/2.0f, 170},{1278, 340}, TOP, GRAY));
+        wall.push_back(Wall({1114/2.0f, 755+(1080-755)/2.0f},{1114, 1080-755}, TOP, GRAY));
+        wall.push_back(Wall({1362+(1920-1362)/2.0f, 775+(1080-775)/2.0f},{1920-1362, 1080-775}, TOP, GRAY));
+
+        //Game Over Panel
+        Panel_GameOver = new GameOverPanel();
+        //Pause Panel
+        Panel_Pause = new PausePanel();
 
         cout<<"Stage One Created"<<endl;
     }
@@ -1612,13 +2038,16 @@ class StageOne
     {
         delete player;
         delete protect_box;
+        delete Panel_GameOver;
         wall.clear();
         PlayerBullet.clear();
+        game.ModGameOver(false);
+        game.ModPause(false);
         cout<<"Stage One Destroyed"<<endl;
     }
     void Update()
     {
-        if(!game.IsGameOver())
+        if(!game.IsGameOver() && !game.IsPaused())
         {
             //General Update
             //Player
@@ -1643,17 +2072,17 @@ class StageOne
                 {
                     SpawnWave = false;
                     SetRandomSeed(time(0));
-                    for(int i = 0; i < 7; i++)
+                    for(int i = 0; i < 4; i++)
                     {
-                        kadal_mid[i].SetPos({float(1930+GetRandomValue(1, 2000)), float(GetRandomValue(300, 700))});
+                        kadal_mid[i].SetPos({float(1930+GetRandomValue(1, 2000)), float(GetRandomValue(350, 700))});
                     }
-                    for(int i = 0; i < 5; i++)
+                    for(int i = 0; i < 3; i++)
                     {
                         kadal_bottom[i].SetPos({float(GetRandomValue(1167, 1362)), float(1100+GetRandomValue(1, 1000))});
                     }
                 }
                 //KADAL MID
-                for(int i = 0; i < 7; i++)
+                for(int i = 0; i < 4; i++)
                 {
                     if(kadal_mid[i].GetPos().x <= protect_box->GetPos().x+200)
                     {
@@ -1670,20 +2099,101 @@ class StageOne
                     kadal_mid[i].Update();
                     if(!kadal_mid[i].GetLiveStatus())
                     {
-                        WaveKillCounter++;
+                        if(dead_kadal_mid[i] != i)
+                        {
+                            WaveKillCounter++;
+                            SetRandomSeed(time(0));
+                            if(GetRandomValue(1, 100) > 60)
+                            {
+                                player->AddAmmo(3);
+                            }
+                        }
+                        dead_kadal_mid[i] = i;
                     }
                 }
                 //KADAL BOTOM
-                for(int i = 0; i < 5; i++)
+                for(int i = 0; i < 3; i++)
                 {
-                    kadal_bottom[i].MoveUp();
+                    if(kadal_bottom[i].GetPos().y >= float(GetRandomValue(protect_box->GetPos().y-20, protect_box->GetPos().y+20)) && kadal_bottom[i].GetPos().x > 1167)
+                    {
+                        kadal_bottom[i].MoveUp();
+                        if(kadal_bottom[i].GetPos().y <= float(GetRandomValue(protect_box->GetPos().y-20, protect_box->GetPos().y+20)))
+                        {
+                            kadal_bottom[i].MoveLeft();
+                        }
+                    }
+                    else
+                    {
+                        kadal_bottom[i].MoveLeft();
+                    }
                     kadal_bottom[i].Update();
+                    if(!kadal_bottom[i].GetLiveStatus())
+                    {
+                        if(dead_kadal_bottom[i] != i)
+                        {
+                            WaveKillCounter++;
+                        }
+                        dead_kadal_bottom[i] = i;
+                    }
                 }
-                /*if(WaveKillCounter == 7)
+                if(WaveKillCounter == 7)
                 {
                     wave++;
-                }*/
+                    WaveKillCounter = 0;
+                    SpawnWave = true;
+                }
                 
+                break;
+            
+            case 2:
+                if(SpawnWave)
+                {
+                    SpawnWave = false;
+                    SetRandomSeed(time(0));
+                    for(int i = 4; i < 7; i++)
+                    {
+                        kadal_mid[i].SetPos({float(1930+GetRandomValue(1, 2000)), float(GetRandomValue(350, 700))});
+                    }
+                    for(int i = 3; i < 5; i++)
+                    {
+                        kadal_bottom[i].SetPos({float(GetRandomValue(1167, 1362)), float(1100+GetRandomValue(1, 1000))});
+                    }
+                    for(int i = 0; i < 2; i++)
+                    {
+                        kadal_top[i].SetPos({float(GetRandomValue(1167, 1362)), float(1100+GetRandomValue(1, 1000))});
+                    }
+                }
+                //KADAL MID                
+                for(int i = 4; i < 7; i++)
+                {
+                    if(kadal_mid[i].GetPos().x <= protect_box->GetPos().x+200)
+                    {
+                        if(kadal_mid[i].GetPos().y < protect_box->GetPos().y-20)
+                        {
+                            kadal_mid[i].MoveDown();
+                        }
+                        else if(kadal_mid[i].GetPos().y > protect_box->GetPos().y+20)
+                        {
+                            kadal_mid[i].MoveUp();
+                        }
+                    }
+                    kadal_mid[i].MoveLeft();
+                    kadal_mid[i].Update();
+                    if(!kadal_mid[i].GetLiveStatus())
+                    {
+                        if(dead_kadal_mid[i] != i)
+                        {
+                            WaveKillCounter++;
+                            SetRandomSeed(time(0));
+                            if(GetRandomValue(1, 100) > 60)
+                            {
+                                player->AddAmmo(3);
+                            }
+                        }
+                        dead_kadal_mid[i] = i;
+                    }
+                }
+
                 break;
             default:
                 break;
@@ -1694,8 +2204,37 @@ class StageOne
             {
                 protect_box->DetectEnemy(kadal_mid[i]);
             }
+            for(int i = 0; i < KADAL_MID_COUNT; i++)
+            {
+                protect_box->DetectEnemy(kadal_bottom[i]);
+            }
+            //Player death game over
+            if(!player->GetLiveStatus())
+            {
+                game.ModGameOver(true);
+            }
 
             //Action Update
+            //Player Melee
+            for(int i = 0; i < KADAL_MID_COUNT; i++)
+            {
+                player->MeleeHit(kadal_mid[i]);
+            }
+            for(int i = 0; i < KADAL_BOTTOM_COUNT; i++)
+            {
+                player->MeleeHit(kadal_bottom[i]);
+            }
+            //Enemy Melee
+            for(int i = 0; i < KADAL_MID_COUNT; i++)
+            {
+                kadal_mid[i].DetectMeleeRange(*player);
+                kadal_mid[i].MeleeHit(*player);
+            }
+            for(int i = 0; i < KADAL_BOTTOM_COUNT; i++)
+            {
+                kadal_bottom[i].DetectMeleeRange(*player);
+                kadal_bottom[i].MeleeHit(*player);
+            }
 
             //Collision Update
             for(int i = 0; i < player->MAX_BULLET; i++)
@@ -1710,9 +2249,22 @@ class StageOne
                 {
                     PlayerBullet[i].DetectCollisionEntity(kadal_mid[j]);
                 }
+                for(int j = 0; j < KADAL_BOTTOM_COUNT; j++)
+                {
+                    PlayerBullet[i].DetectCollisionEntity(kadal_bottom[j]);
+                }
             }
 
             
+        }
+        //Game over panel update
+        Panel_GameOver->Update();
+        //Pause panel update
+        Panel_Pause->Update();
+        //Pause
+        if(IsKeyPressed(KEY_P))
+        {
+            game.ModPause(true);
         }
         //Manual exit
         if(IsKeyPressed(KEY_ESCAPE))
@@ -1739,6 +2291,8 @@ class StageOne
 
         player->DrawUI();
         DrawText(TextFormat("%.2f, %.2f", player->GetPos().x, player->GetPos().y), 500, 0, 50, BLACK);
+        DrawText(TextFormat("%d", wave), 900, 0, 20, BLACK);
+        DrawText(TextFormat("%d", WaveKillCounter), 950, 0, 20, BLACK);
 
         switch(wave)
         {
@@ -1756,13 +2310,8 @@ class StageOne
         default:
             break;
         }
-
-        DrawFPS(0, 0);
-
-        if(game.IsGameOver())
-        {
-            DrawText("GAME OVER", game.GetWindowWidth()/2.0f, game.GetWindowHeight()/2.0f, 70, RED);
-        }
+        Panel_GameOver->Draw();
+        Panel_Pause->Draw();
 
         EndDrawing();
     }
@@ -1850,6 +2399,13 @@ int main()
             stage_one->Update();
             stage_one->Draw();
 
+            if(game.IsResetStage())
+            {
+                stage_one->~StageOne();
+                CreateObject = true;
+                game.ModResetStage(false);
+            }
+
             if(!game.IsInStageOne() || game.IsExit())
             {
                 stage_one->~StageOne();
@@ -1861,21 +2417,4 @@ int main()
 
     game.TextureUnload();
     CloseWindow();
-
-        /*
-        ///////////////////////
-        //MANUAL RESET, DEBUG PURPOSE ONLY//
-        //////////////////////
-        if(IsKeyPressed(KEY_TAB))
-        {
-            player.ResetState();
-            enemy.ResetState();
-            for(int i = 0; i < 10; i++)
-            {
-                kadal[i].ResetState();
-            }
-            game.ModGameOver(false);
-        }        
-    }*/
-    
 }
